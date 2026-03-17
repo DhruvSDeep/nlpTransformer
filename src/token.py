@@ -1,10 +1,5 @@
 import mido
 from collections import defaultdict
-import glob
- 
-# ──────────────────────────────────────────────
-# Quantization helpers
-# ──────────────────────────────────────────────
  
 def quantize_velocity(velocity, num_bins=32):
     if velocity == 0:
@@ -95,18 +90,22 @@ def tokenize_midi(filepath):
         time_shift = quantize_time(note['start'] - prev_start, tpb)
  
         if time_shift > 0:
-            tokens.append(f"REST_T{time_shift}")
+            for i in range(time_shift // 32):
+                tokens.append(f"REST_T32")     #splitting rests longer than 32 steps into multiple tokens
+            if time_shift % 32 > 0:
+                tokens.append(f"REST_T{time_shift % 32}")
  
         vel = quantize_velocity(note['velocity'])
         dur = quantize_time(note['duration'], tpb)
         dur = max(1, dur)
+        dur = min(dur, 64)           #Capping duration to 64 steps (4 beats) to avoid excessively long notes
  
-        tokens.append(f"P{note['pitch']}_V{vel}_D{dur}")
+        tokens.append(f"P{note['pitch']}_V{vel}_D{dur}")     #here, pitch can be from 0 to 127, velocity from 1 to 31, and duration from 1 to 64 steps
         prev_start = note['start']
- 
+
     return tokens
- 
- 
+
+
 def detokenize_midi(tokens, output_path, ticks_per_beat=480):
     """Convert a list of token strings into a playable MIDI file."""
     mid = mido.MidiFile(ticks_per_beat=ticks_per_beat)
@@ -168,15 +167,36 @@ def detokenize_midi(tokens, output_path, ticks_per_beat=480):
  
     mid.save(output_path)
     return output_path
- 
- 
-# ──────────────────────────────────────────────
-# Example usage
-# ──────────────────────────────────────────────
- 
-if __name__ == '__main__':
-    
-    midi_files = glob.glob("data/maestro/**/*.midi", recursive=True)
-    tokenized = tokenize_midi(midi_files[10])
-    detokenized = detokenize_midi(tokenized, "output.mid")
 
+
+def tokenToInt(tokens):
+    intToken = [1]
+    for i in tokens:
+        if i[0] == 'P':
+            i=i.split('_')    #here im hardcoding 31, 64 as the maximum possible values our tokenizer has for velociy and duration.
+            toAppend = int(i[0][1:]) * 31 * 64 + (int(i[1][1:]) - 1) * 64 + int(i[2][1:]) - 1
+        else:
+            i = i.split('T')   # there are 128 possible pitch values
+            toAppend = 128 * 31* 64 + int(i[1]) - 1
+        toAppend += 3
+        intToken.append(toAppend)
+    intToken.append(2)
+    return intToken
+
+def intToToken(intTokens):
+    tokens = []
+    for i in intTokens:
+        if i <= 2:
+            continue                # skip PAD, BOS, EOS
+        i -= 3
+        noteCount = 128 * 31 * 64
+        if i < noteCount:
+            d = i % 64 + 1
+            i //= 64
+            v = i % 31 + 1
+            p = i // 31
+            tokens.append(f"P{p}_V{v}_D{d}")
+        else:
+            t = i - noteCount + 1
+            tokens.append(f"REST_T{t}")
+    return tokens
