@@ -1,5 +1,9 @@
 import mido
 from collections import defaultdict
+import torch
+import torch.nn as nn
+from torch.utils.data import Dataset
+
  
 def quantize_velocity(velocity, num_bins=32):
     if velocity == 0:
@@ -200,3 +204,22 @@ def intToToken(intTokens):
             t = i - noteCount + 1
             tokens.append(f"REST_T{t}")
     return tokens
+
+
+class MidiDataset(Dataset):
+    def __init__(self, intSeq, seq_len):
+        self.samples = []
+        for seq in intSeq:
+            for i in range(0, len(seq) - seq_len, seq_len // 2):
+                chunk = seq[i:i + seq_len + 1]
+                if len(chunk) == seq_len + 1:
+                    self.samples.append(chunk)
+
+    def __len__(self):
+        return len(self.samples)
+    
+    def __getitem__(self, idx):
+        item = torch.tensor(self.samples[idx], dtype=torch.long)
+        x = item[:-1]
+        y = item[1:]
+        return x, y
