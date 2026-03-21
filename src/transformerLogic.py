@@ -123,6 +123,7 @@ def train(model, dataloader, epochs, vocab_size):
     scaler = torch.cuda.amp.GradScaler()
     model.train()
     optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=0.01)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
     criterion = nn.CrossEntropyLoss(ignore_index=0)
     mask = create_causal_mask(SEQ_LEN, device)
 
@@ -143,6 +144,7 @@ def train(model, dataloader, epochs, vocab_size):
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             scaler.step(optimizer)
             scaler.update()
+            scheduler.step()
             total_loss += loss.item()
             num_batches += 1
 
