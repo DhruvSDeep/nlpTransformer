@@ -13,8 +13,8 @@ EMBED_DIM = 256
 NUM_HEADS = 8
 NUM_LAYERS = 6
 FF_DIM = 1024
-LEARNING_RATE = 3e-4
-EPOCHS = 50
+LEARNING_RATE = 1.2e-3
+EPOCHS = 150
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
@@ -123,9 +123,17 @@ def train(model, dataloader, epochs, vocab_size):
     scaler = torch.cuda.amp.GradScaler()
     model.train()
     optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=0.01)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
     criterion = nn.CrossEntropyLoss(ignore_index=0)
     mask = create_causal_mask(SEQ_LEN, device)
+
+    warpUpEpochs = 3
+    def lr_lambda(epoch):
+        if epoch < warpUpEpochs:
+            return (epoch + 1) / warpUpEpochs
+        else:
+            return 0.5 * (1 + math.cos(math.pi * (epoch - warpUpEpochs) / (epochs - warpUpEpochs)))
+        
+    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 
     for epoch in range(epochs):
         total_loss = 0
@@ -136,7 +144,7 @@ def train(model, dataloader, epochs, vocab_size):
             y=y.to(device)
             optimizer.zero_grad()
             
-            with torch.cuda.amp.autocast():
+            with torch.amp.autocast('cuda'):
                 logits = model(x, mask)
                 loss = criterion(logits.view(-1, vocab_size), y.view(-1))
             scaler.scale(loss).backward()
@@ -144,12 +152,13 @@ def train(model, dataloader, epochs, vocab_size):
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             scaler.step(optimizer)
             scaler.update()
-            scheduler.step()
             total_loss += loss.item()
             num_batches += 1
 
         avg_loss = total_loss / num_batches
-        print(f"Epoch {epoch+1}/{epochs} | Loss: {avg_loss:.4f}")    
+        print(f"Epoch {epoch+1}/{epochs} | Loss: {avg_loss:.4f}") 
+        scheduler.step()
+   
 
         if epoch % 10 == 0 and epoch > 1:
             save(model.state_dict(), "./checkpoints/model_weights_interrupted.pt")
