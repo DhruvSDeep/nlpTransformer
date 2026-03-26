@@ -1,6 +1,7 @@
 import pickle
 import glob
 import os
+import re
 
 def wordFreqDict():
     freqDict={}
@@ -14,7 +15,7 @@ def wordFreqDict():
 
     for i in txt_files:
         with open(i, 'r', encoding='utf-8') as f:
-            words=(f.read()).split()
+            words=re.findall(r"\w+|[^\w\s]", f.read())
             for j in words:
                 if j not in freqDict:
                     freqDict[j] = 1
