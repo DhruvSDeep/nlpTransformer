@@ -4,17 +4,14 @@ import torch.nn.functional as F
 import math
 from torch import save
 
-
-
-VOCAB_SIZE = 128 * 31 * 64 + 32 + 3   # notes + rests + special tokens
 SEQ_LEN = 512
 BATCH_SIZE = 16
 EMBED_DIM = 256
 NUM_HEADS = 8
 NUM_LAYERS = 6
 FF_DIM = 1024
-LEARNING_RATE = 1.2e-3
-EPOCHS = 150
+LEARNING_RATE = 2e-4
+EPOCHS = 35
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
@@ -43,6 +40,7 @@ class multiHeadAttention(nn.Module):
         self.k_proj = nn.Linear(embed_dim, embed_dim)
         self.v_proj = nn.Linear(embed_dim, embed_dim)
         self.out_proj = nn.Linear(embed_dim, embed_dim)
+        self.dropout = nn.Dropout(0.1)
     
     def forward(self, x, mask=None):
         batch_size, seq_len, _ = x.shape
@@ -56,10 +54,11 @@ class multiHeadAttention(nn.Module):
         if mask is not None:            #this does the triangle matrix. mask is a matrix with 1s everywhere, and 0s above the diag. 
             scores = scores.masked_fill(mask == 0, float('-inf'))
         weights = F.softmax(scores, dim=-1)
+        weights = self.dropout(weights)
 
         out = torch.matmul(weights, V)
         out = out.transpose(1, 2).contiguous().view(batch_size, seq_len, -1) #This recombines multiple heads into 1
-        return self.out_proj(out)
+        return self.dropout(self.out_proj(out))
 
 
 class feedForward(nn.Module):
@@ -68,11 +67,13 @@ class feedForward(nn.Module):
         self.expand = nn.Linear(embed_dim, ff_dim)
         self.gelu = nn.GELU()
         self.compress = nn.Linear(ff_dim, embed_dim)
+        self.dropout = nn.Dropout(0.1)
     def forward(self, x):
         x=self.expand(x)
         x=self.gelu(x)
+        x=self.dropout(x)
         x=self.compress(x)
-        return x
+        return self.dropout(x)
 
 class transformerBlock(nn.Module):
     def __init__(self, embed_dim, num_heads, ff_dim):
@@ -99,10 +100,12 @@ class transformer(nn.Module):
         self.norm = nn.LayerNorm(embed_dim)
         self.outHead = nn.Linear(embed_dim, vocab_size, bias = False)
         self.outHead.weight = self.tokenEmbedding.weight
+        self.dropout = nn.Dropout(0.1)
 
     def forward(self, x, mask = None):
         x = self.tokenEmbedding(x)
         x = self.pos_encoding(x)
+        x = self.dropout(x)
         for layer in self.layers:
             x = layer(x, mask)
         x = self.norm(x)
@@ -122,16 +125,17 @@ def train(model, dataloader, epochs, vocab_size):
     print(f"Training on {device}, {sum(p.numel() for p in model.parameters()):,} parameters")
     scaler = torch.cuda.amp.GradScaler()
     model.train()
-    optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=0.01)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=0.1)
     criterion = nn.CrossEntropyLoss(ignore_index=0)
     mask = create_causal_mask(SEQ_LEN, device)
 
-    warpUpEpochs = 3
-    def lr_lambda(epoch):
-        if epoch < warpUpEpochs:
-            return (epoch + 1) / warpUpEpochs
+    total_steps = epochs * len(dataloader)
+    warpUpStep = 2000
+    def lr_lambda(currStep):
+        if currStep < warpUpStep:
+            return (currStep + 1) / warpUpStep
         else:
-            return 0.5 * (1 + math.cos(math.pi * (epoch - warpUpEpochs) / (epochs - warpUpEpochs)))
+            return 0.5 * (1 + math.cos(math.pi * (currStep - warpUpStep) / (total_steps - warpUpStep)))
         
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 
@@ -154,10 +158,11 @@ def train(model, dataloader, epochs, vocab_size):
             scaler.update()
             total_loss += loss.item()
             num_batches += 1
+            scheduler.step()
 
         avg_loss = total_loss / num_batches
         print(f"Epoch {epoch+1}/{epochs} | Loss: {avg_loss:.4f}") 
-        scheduler.step()
+        
    
 
         if epoch % 10 == 0 and epoch > 1:

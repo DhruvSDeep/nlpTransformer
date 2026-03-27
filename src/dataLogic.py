@@ -2,6 +2,9 @@ import pickle
 import glob
 import os
 import re
+import torch
+import torch.nn as nn
+from torch.utils.data import Dataset
 
 def wordFreqDict():
     freqDict={}
@@ -15,7 +18,8 @@ def wordFreqDict():
 
     for i in txt_files:
         with open(i, 'r', encoding='utf-8') as f:
-            words=re.findall(r"\w+|[^\w\s]", f.read())
+            words=re.findall(r"\s*\w+|[^\w\s]", f.read())
+            words = [w.replace(' ', '_') for w in words]
             for j in words:
                 if j not in freqDict:
                     freqDict[j] = 1
@@ -93,8 +97,56 @@ def bytePairEncode(maxVocab):
 
     return(manual, vocab)
 
-
-                    
-
-
+def tokenise(stri, manual):
+    words = re.findall(r"\s*\w+|[^\w\s]", stri)
+    words = [w.replace(' ', '_') for w in words]
     
+    merge_rank = {pair: i for i, pair in enumerate(manual)}
+    
+    result = []
+    for word in words:
+        tokens = list(word)
+        while len(tokens) > 1:
+            # find the best merge in this word
+            best_pair = None
+            best_rank = float('inf')
+            for j in range(len(tokens) - 1):
+                pair = (tokens[j], tokens[j+1])
+                if pair in merge_rank and merge_rank[pair] < best_rank:
+                    best_rank = merge_rank[pair]
+                    best_pair = pair
+            if best_pair is None:
+                break
+            # apply that merge everywhere in the word
+            a, b = best_pair
+            j = 0
+            while j < len(tokens) - 1:
+                if tokens[j] == a and tokens[j+1] == b:
+                    tokens[j] = a + b
+                    tokens.pop(j+1)
+                    j -= 1
+                j += 1
+        result.extend(tokens)
+    return result
+
+
+
+
+class tokenDataset(Dataset):
+    def __init__(self, token_ids, seq_len):
+        self.samples = []
+        for i in range(0, len(token_ids) - seq_len, seq_len):
+            chunk = token_ids[i : i + seq_len + 1]
+            self.samples.append(chunk)
+
+    def __len__(self):
+        return(len(self.samples))
+    
+    def __getitem__(self, idx):
+        item = torch.tensor(self.samples[idx], dtype=torch.long)
+        x = item[:-1]
+        y = item[1:]
+        return x, y
+
+
+
