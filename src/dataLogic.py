@@ -10,14 +10,9 @@ def wordFreqDict():
     freqDict={}
     txt_files = glob.glob("./data/**/*.txt", recursive=True)
 
-    for filepath in txt_files:
-        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
-            clean_text = f.read()
-        with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(clean_text)
 
     for i in txt_files:
-        with open(i, 'r', encoding='utf-8') as f:
+        with open(i, 'r', encoding='utf-8', errors='ignore') as f:
             words=re.findall(r"\s*\w+|[^\w\s]", f.read())
             words = [w.replace(' ', '_') for w in words]
             for j in words:

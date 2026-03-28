@@ -5,13 +5,13 @@ import math
 from torch import save
 
 SEQ_LEN = 512
-BATCH_SIZE = 512
+BATCH_SIZE = 32
 EMBED_DIM = 256
 NUM_HEADS = 8
 NUM_LAYERS = 6
 FF_DIM = 1024
-LEARNING_RATE = 2e-4
-EPOCHS = 100
+LEARNING_RATE = 3e-4
+EPOCHS = 30
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
@@ -125,12 +125,12 @@ def train(model, dataloader, epochs, vocab_size):
     print(f"Training on {device}, {sum(p.numel() for p in model.parameters()):,} parameters")
     scaler = torch.cuda.amp.GradScaler()
     model.train()
-    optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=0.1)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=0.01)
     criterion = nn.CrossEntropyLoss(ignore_index=0)
     mask = create_causal_mask(SEQ_LEN, device)
 
     total_steps = epochs * len(dataloader)
-    warpUpStep = 2000
+    warpUpStep = 500
     def lr_lambda(currStep):
         if currStep < warpUpStep:
             return (currStep + 1) / warpUpStep

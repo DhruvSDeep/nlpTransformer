@@ -47,7 +47,7 @@ with open("./data/token_to_idx.pkl", 'wb') as f:
     pickle.dump(token_to_idx, f)
 
 dataset = dataLogic.tokenDataset(token_ids, seq_len=512)
-dataloader = DataLoader(dataset, batch_size=16, shuffle=True)
+dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
 
 
 
