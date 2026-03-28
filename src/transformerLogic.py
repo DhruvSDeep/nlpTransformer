@@ -5,7 +5,7 @@ import math
 from torch import save
 
 SEQ_LEN = 512
-BATCH_SIZE = 1024
+BATCH_SIZE = 512
 EMBED_DIM = 256
 NUM_HEADS = 8
 NUM_LAYERS = 6
