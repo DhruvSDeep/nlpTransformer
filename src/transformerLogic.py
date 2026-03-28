@@ -5,13 +5,13 @@ import math
 from torch import save
 
 SEQ_LEN = 512
-BATCH_SIZE = 16
+BATCH_SIZE = 1024
 EMBED_DIM = 256
 NUM_HEADS = 8
 NUM_LAYERS = 6
 FF_DIM = 1024
 LEARNING_RATE = 2e-4
-EPOCHS = 35
+EPOCHS = 100
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
