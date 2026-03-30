@@ -25,10 +25,10 @@ idx_to_token = {i: t for t, i in token_to_idx.items()}
 VOCAB_SIZE = len(token_to_idx)
 
 model = transformerLogic.transformer(VOCAB_SIZE, EMBED_DIM, NUM_HEADS, NUM_LAYERS, FF_DIM)
-model.load_state_dict(torch.load("./checkpoints/model_weights_interrupted.pt"))
+model.load_state_dict(torch.load("./checkpoints/model_weights_of_epoch_{epoch}.pt"))
 
 prompt = """
-A musical masterpiece
+They never lie. But what they say is not the truth.
 """
 output = generate(model, prompt, manual, token_to_idx, idx_to_token)
 print(output)

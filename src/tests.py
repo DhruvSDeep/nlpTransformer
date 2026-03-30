@@ -1,7 +1,9 @@
 import glob
 import shutil
 import os
+import pickle
 
+"""
 src_files = glob.glob(r"C:\Users\dhruv\Calibre Library\Patrick Rothfuss\**\*.txt", recursive=True)
 
 
@@ -20,3 +22,10 @@ for f in src_files:
     shutil.copy2(f, dest)
 
 print(f"Copied {len(src_files)} files to {pathTo}")
+"""
+
+
+with open("./data/vocab.pkl", 'rb') as f:
+    a = pickle.load(f)
+
+print(f)

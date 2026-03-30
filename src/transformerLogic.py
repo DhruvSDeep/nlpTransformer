@@ -1,3 +1,5 @@
+import os
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -10,8 +12,8 @@ EMBED_DIM = 256
 NUM_HEADS = 8
 NUM_LAYERS = 6
 FF_DIM = 1024
-LEARNING_RATE = 3e-4
-EPOCHS = 30
+LEARNING_RATE = 6e-4
+EPOCHS = 80
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
@@ -40,7 +42,7 @@ class multiHeadAttention(nn.Module):
         self.k_proj = nn.Linear(embed_dim, embed_dim)
         self.v_proj = nn.Linear(embed_dim, embed_dim)
         self.out_proj = nn.Linear(embed_dim, embed_dim)
-        self.dropout = nn.Dropout(0.1)
+        self.dropout = nn.Dropout(0.2)
     
     def forward(self, x, mask=None):
         batch_size, seq_len, _ = x.shape
@@ -65,15 +67,16 @@ class feedForward(nn.Module):
     def __init__(self, embed_dim, ff_dim):
         super().__init__()
         self.expand = nn.Linear(embed_dim, ff_dim)
-        self.gelu = nn.GELU()
+        # self.gelu = nn.GELU()
+        self.silu = nn.SiLU()
+        self.gate = nn.Linear(embed_dim, ff_dim)
         self.compress = nn.Linear(ff_dim, embed_dim)
-        self.dropout = nn.Dropout(0.1)
+        self.dropout = nn.Dropout(0.2)
     def forward(self, x):
-        x=self.expand(x)
-        x=self.gelu(x)
+        x=self.silu(self.gate(x)) * self.expand(x)
         x=self.dropout(x)
         x=self.compress(x)
-        return self.dropout(x)
+        return x
 
 class transformerBlock(nn.Module):
     def __init__(self, embed_dim, num_heads, ff_dim):
@@ -119,18 +122,19 @@ def create_causal_mask(seq_len, device):
 
 
 
-def train(model, dataloader, epochs, vocab_size):
+def train(model, dataloader, validLoader, epochs, vocab_size):
+    best_val_loss = float('inf')
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model.to(device)
     print(f"Training on {device}, {sum(p.numel() for p in model.parameters()):,} parameters")
     scaler = torch.cuda.amp.GradScaler()
     model.train()
-    optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=0.01)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=0.1)
     criterion = nn.CrossEntropyLoss(ignore_index=0)
     mask = create_causal_mask(SEQ_LEN, device)
 
     total_steps = epochs * len(dataloader)
-    warpUpStep = 500
+    warpUpStep = 2000
     def lr_lambda(currStep):
         if currStep < warpUpStep:
             return (currStep + 1) / warpUpStep
@@ -139,6 +143,24 @@ def train(model, dataloader, epochs, vocab_size):
         
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 
+    def evaluate(model, validLoader, vocab_size):
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model.eval()
+        total_loss = 0
+        num_batches = 0
+        criterion = nn.CrossEntropyLoss(ignore_index=0)
+        mask = create_causal_mask(SEQ_LEN, device)
+        with torch.no_grad():
+            for x, y in validLoader:
+                x=x.to(device)
+                y=y.to(device)
+                with torch.amp.autocast('cuda'):
+                    logits = model(x, mask)
+                    loss = criterion(logits.view(-1, vocab_size), y.view(-1))
+                total_loss += loss.item()
+                num_batches += 1
+        model.train()
+        return(total_loss/num_batches)
     for epoch in range(epochs):
         total_loss = 0
         num_batches = 0
@@ -159,14 +181,18 @@ def train(model, dataloader, epochs, vocab_size):
             total_loss += loss.item()
             num_batches += 1
             scheduler.step()
+            
 
-        avg_loss = total_loss / num_batches
-        print(f"Epoch {epoch+1}/{epochs} | Loss: {avg_loss:.4f}") 
-        
+        avg_loss = total_loss / num_batches 
+        val_loss = evaluate(model, validLoader, vocab_size)
+        print(f"Epoch {epoch+1}/{epochs} | Train: {avg_loss:.4f} | Val: {val_loss:.4f}")
    
-
+        if val_loss < best_val_loss:
+            save(model.state_dict(), f"./checkpoints/model_weights_{epoch}e_{val_loss}.pt")
+        
         if epoch % 10 == 0 and epoch > 1:
-            save(model.state_dict(), "./checkpoints/model_weights_interrupted.pt")
+            save(model.state_dict(), f"./checkpoints/model_weights_of_epoch_{epoch}.pt")
+            torch.cuda.empty_cache()
     
     
 def creation(model, seed, max_length=512, temperature=1, topK=50):
