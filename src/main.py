@@ -69,6 +69,6 @@ validLoader = DataLoader(validSet, batch_size=BATCH_SIZE, shuffle=True)
 
 model = transformerLogic.transformer(VOCAB_SIZE, EMBED_DIM, NUM_HEADS, NUM_LAYERS, FF_DIM)
 # model.load_state_dict(torch.load("./checkpoints/model_weights_of_epoch_{epoch}.pt"))
-transformerLogic.train(model, dataloader, EPOCHS, VOCAB_SIZE)
+transformerLogic.train(model, dataloader, validLoader, EPOCHS, VOCAB_SIZE)
 torch.save(model.state_dict(), "./checkpoints/model_weights.pt")
 

@@ -28,7 +28,7 @@ model = transformerLogic.transformer(VOCAB_SIZE, EMBED_DIM, NUM_HEADS, NUM_LAYER
 model.load_state_dict(torch.load("./checkpoints/model_weights_of_epoch_{epoch}.pt"))
 
 prompt = """
-They never lie. But what they say is not the truth.
+They never lie. But, 
 """
 output = generate(model, prompt, manual, token_to_idx, idx_to_token)
 print(output)

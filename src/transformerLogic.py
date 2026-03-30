@@ -189,6 +189,7 @@ def train(model, dataloader, validLoader, epochs, vocab_size):
    
         if val_loss < best_val_loss:
             save(model.state_dict(), f"./checkpoints/model_weights_{epoch}e_{val_loss}.pt")
+            best_val_loss = val_loss
         
         if epoch % 10 == 0 and epoch > 1:
             save(model.state_dict(), f"./checkpoints/model_weights_of_epoch_{epoch}.pt")
