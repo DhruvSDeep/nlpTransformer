@@ -1,8 +1,6 @@
-data/
 outputs/
-*.pt
 *.pth
-*.pkl
 .env
 venv/
 .ipynb_checkpoints/
+*.txt
