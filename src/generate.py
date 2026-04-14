@@ -28,7 +28,7 @@ model = transformerLogic.transformer(VOCAB_SIZE, EMBED_DIM, NUM_HEADS, NUM_LAYER
 model.load_state_dict(torch.load("./checkpoints/model_weights.pt"))
 
 prompt = """
-A story does not need a start or an end. Only, a beginning.
+The sky itself will perish, before the ground deigns to wake.
 """
 output = generate(model, prompt, manual, token_to_idx, idx_to_token)
 print(output)
